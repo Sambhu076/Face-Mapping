@@ -1,0 +1,85 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-facemap}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - faces_network
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    networks:
+      - faces_network
+
+  web:
+    build: .
+    restart: always
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - .:/app
+      - media_volume:/app/media
+      - data_volume:/app/data
+      - insightface_models:/root/.insightface
+    environment:
+      - DJANGO_SETTINGS_MODULE=studioface.settings
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - redis
+    networks:
+      - faces_network
+
+  celery_worker:
+    build: .
+    restart: always
+    command: celery -A studioface worker --loglevel=info --concurrency=4
+    volumes:
+      - .:/app
+      - media_volume:/app/media
+      - data_volume:/app/data
+      - insightface_models:/root/.insightface
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - redis
+    networks:
+      - faces_network
+
+  frontend:
+    build:
+      context: ./frontend
+      target: development-stage
+    restart: always
+    # For development, we might want to use the dev server
+    # For production, we would use the nginx-based Dockerfile we created
+    command: npm run dev -- --host
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    depends_on:
+      - web
+    networks:
+      - faces_network
+
+volumes:
+  postgres_data:
+  media_volume:
+  data_volume:
+  insightface_models:
+
+
+networks:
+  faces_network:
+    driver: bridge

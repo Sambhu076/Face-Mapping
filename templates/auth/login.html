@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="auth-shell">
+    <article class="auth-card">
+        <div class="section-heading">
+            <h2>Login</h2>
+            <p>Admins manage photo indexing. Users sign in to search for matching studio photos.</p>
+        </div>
+        <form method="post" class="stack">
+            {% csrf_token %}
+            {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
+            {{ form.as_p }}
+            <button type="submit">Sign In</button>
+        </form>
+        <p class="auth-switch">New user? <a href="{% url 'faces:register' %}">Create an account</a></p>
+        <p class="auth-note">Admin access is granted through Django staff or superuser accounts.</p>
+    </article>
+</section>
+{% endblock %}

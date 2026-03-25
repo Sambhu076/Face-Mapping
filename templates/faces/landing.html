@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="landing-simple">
+    <div class="landing-simple-copy">
+        <p class="landing-kicker">QR-Based Event Access</p>
+        <h2>Scan your event QR and open your event dashboard.</h2>
+        <p class="landing-intro">
+            Each QR code opens one event-specific user dashboard. Guests upload a face image, match it against that event archive, and download only the photos containing that face.
+        </p>
+        <div class="cta-actions landing-simple-actions">
+            <a class="cta-button cta-button-secondary" href="{% url 'faces:login' %}?force_admin=1">Admin Login</a>
+        </div>
+    </div>
+
+    <div class="landing-simple-panel">
+        <div class="simple-point">
+            <h3>Open Event Dashboard</h3>
+            <p>Scan the QR code shared by the studio. If you already have the event URL, paste it here to open the event-specific user dashboard.</p>
+            <form class="stack" data-event-link-form>
+                <p>
+                    <label for="event-link-input">Event Link</label>
+                    <input id="event-link-input" type="text" name="event_link" placeholder="Paste the QR event link here">
+                </p>
+                <button type="submit">Open Event Access</button>
+            </form>
+        </div>
+        <div class="simple-point">
+            <h3>Upload Face Image</h3>
+            <p>On the event dashboard, upload a clear face image to search only within that event.</p>
+        </div>
+        <div class="simple-point">
+            <h3>Retrieve Matching Photos</h3>
+            <p>All matched images from that event are shown and can be downloaded individually or as a ZIP.</p>
+        </div>
+        <div class="simple-point">
+            <h3>No Guest Login</h3>
+            <p>Guests do not need an account. Only the admin signs in to create events, upload files, and generate QR codes.</p>
+        </div>
+    </div>
+</section>
+{% endblock %}

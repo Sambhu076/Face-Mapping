@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="dashboard-hero">
+    <div>
+        <p class="landing-kicker">Admin Dashboard</p>
+        <h2>Manage events and open the right workspace faster.</h2>
+        <p class="hero-copy">
+            Keep this page focused on event setup. Open an event dashboard only when you need uploads, indexing, or QR access for guests.
+        </p>
+    </div>
+    <div class="dashboard-stats">
+        <div class="stat-card">
+            <strong>{{ events|length }}</strong>
+            <span>Total Events</span>
+        </div>
+        <div class="stat-card">
+            <strong>{{ photo_count }}</strong>
+            <span>Indexed Photos</span>
+        </div>
+        <div class="stat-card">
+            <strong>{{ face_count }}</strong>
+            <span>Stored Faces</span>
+        </div>
+    </div>
+</section>
+
+<main class="dashboard-grid admin-dashboard-grid">
+    <section class="card admin-create-card">
+        <div class="section-heading">
+            <h2>Create Event</h2>
+            <p>Create the event here, then open its dashboard for uploads and QR sharing.</p>
+        </div>
+        <form method="post" class="stack">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="create-event">
+            {{ event_form.as_p }}
+            <button type="submit">Create Event</button>
+        </form>
+    </section>
+
+    <section class="card">
+        <div class="section-heading">
+            <h2>Your Events</h2>
+            <p>Open an event dashboard, or update the event name and date from this list.</p>
+        </div>
+        {% if events %}
+            <div class="event-list">
+                {% for event in events %}
+                    <article class="event-item event-admin-item">
+                        <div class="event-admin-header">
+                            <div class="event-admin-meta">
+                                <h3>{{ event.name }}</h3>
+                            </div>
+                            <a class="copy-link-button" href="{% url 'faces:admin-event-dashboard' event.id %}">Open Dashboard</a>
+                        </div>
+
+                        <div class="event-admin-controls">
+                            <form method="post" class="stack inline-manage-form compact-form">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="rename-event">
+                                <input type="hidden" name="event_id" value="{{ event.id }}">
+                                {{ event.rename_form.as_p }}
+                                <button type="submit" class="button-subtle">Save</button>
+                            </form>
+
+                            <div class="event-admin-actions">
+                                {% if event.uploaded_photos %}
+                                    <button
+                                        type="button"
+                                        class="button-subtle"
+                                        data-face-modal-open="event-photo-modal-{{ event.id }}"
+                                    >
+                                        View Uploaded Photos
+                                    </button>
+                                {% endif %}
+                                <form method="post" class="inline-delete-form">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="delete-event">
+                                    <input type="hidden" name="event_id" value="{{ event.id }}">
+                                    <button type="submit" class="button-subtle button-subtle-danger">Delete</button>
+                                </form>
+                            </div>
+                        </div>
+                    </article>
+                {% endfor %}
+            </div>
+            {% for event in events %}
+                {% if event.uploaded_photos %}
+                    <div class="face-modal" id="event-photo-modal-{{ event.id }}" hidden>
+                        <div class="face-modal-backdrop" data-face-modal-close></div>
+                        <div class="face-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="event-photo-modal-title-{{ event.id }}">
+                            <div class="face-modal-header">
+                                <div>
+                                    <p class="landing-kicker">Uploaded Photos</p>
+                                    <h3 id="event-photo-modal-title-{{ event.id }}">{{ event.name }}</h3>
+                                    <p>{{ event.uploaded_photos|length }} uploaded photo{{ event.uploaded_photos|pluralize }} for this event.</p>
+                                </div>
+                                <button type="button" class="button-subtle" data-face-modal-close>Close</button>
+                            </div>
+                            <div class="admin-photo-modal-grid">
+                                {% for photo in event.uploaded_photos %}
+                                    <article class="gallery-card admin-gallery-card">
+                                        <img src="{{ photo.original_image.url }}" alt="{{ photo.title|default:'Uploaded photo' }}">
+                                        <div class="gallery-meta">
+                                            <h4>{{ photo.title|default:"Untitled Photo" }}</h4>
+                                            <p>{{ photo.uploaded_at|date:"M d, Y H:i" }}</p>
+                                            <p>{{ photo.face_count }} indexed face{{ photo.face_count|pluralize }}</p>
+                                        </div>
+                                    </article>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                {% endif %}
+            {% endfor %}
+        {% else %}
+            <div class="empty-state">No events yet. Create one to start building the archive.</div>
+        {% endif %}
+    </section>
+</main>
+
+{% endblock %}

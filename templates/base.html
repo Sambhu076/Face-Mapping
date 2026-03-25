@@ -1,0 +1,332 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Studio Face Finder</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+</head>
+<body>
+    <div class="page-shell">
+        <header class="hero">
+            <div class="hero-copy-block">
+                <p class="eyebrow">Photography Studio Search</p>
+                <h1>Find every matching face across event galleries.</h1>
+                <p class="hero-copy">
+                    Admins build the searchable archive. Signed-in users upload a selfie and retrieve matching event photos in seconds.
+                </p>
+            </div>
+            <nav class="top-nav">
+                {% if request.user.is_authenticated and request.user.is_staff %}
+                    <span class="user-badge">
+                        {{ request.user.get_full_name|default:request.user.username }} | Admin
+                    </span>
+                    <a href="{% url 'faces:home' %}">Dashboard</a>
+                    <a href="{% url 'faces:logout' %}">Logout</a>
+                {% else %}
+                    <a href="{% url 'faces:landing' %}">Home</a>
+                    <a href="{% url 'faces:login' %}?force_admin=1">Admin Login</a>
+                {% endif %}
+            </nav>
+        </header>
+        {% if messages %}
+            <section class="messages">
+                {% for message in messages %}
+                    <div class="message {{ message.tags }}">{{ message }}</div>
+                {% endfor %}
+            </section>
+        {% endif %}
+        {% block content %}{% endblock %}
+    </div>
+    <script>
+        document.querySelectorAll("form[data-loading]").forEach(function (form) {
+            form.addEventListener("submit", function () {
+                if (form.dataset.uploadProgress) {
+                    return;
+                }
+                const target = document.getElementById(form.dataset.loading);
+                if (target) {
+                    target.hidden = false;
+                }
+            });
+        });
+
+        document.querySelectorAll("form[data-upload-progress]").forEach(function (form) {
+            form.addEventListener("submit", function (event) {
+                event.preventDefault();
+
+                const method = form.getAttribute("method") || "POST";
+                const actionUrl = form.getAttribute("action") || window.location.href;
+                const loadingTarget = document.getElementById(form.dataset.loading);
+                const progressTarget = document.getElementById(form.dataset.uploadProgress);
+                const progressBar = progressTarget ? progressTarget.querySelector("[data-progress-bar]") : null;
+                const progressValue = progressTarget ? progressTarget.querySelector("[data-progress-value]") : null;
+                const progressNote = progressTarget ? progressTarget.querySelector("[data-progress-note]") : null;
+                const cancelButton = progressTarget ? progressTarget.querySelector("[data-upload-cancel]") : null;
+                const submitButton = form.querySelector("button[type='submit']");
+                const fileInput = form.querySelector("input[type='file'][data-upload-batch-size]");
+                const batchSize = fileInput ? Number(fileInput.dataset.uploadBatchSize || "20") : 0;
+                const selectedFiles = fileInput ? Array.from(fileInput.files) : [];
+                const totalFiles = selectedFiles.length;
+                const totalBytes = selectedFiles.reduce(function (sum, file) {
+                    return sum + file.size;
+                }, 0);
+                const totalBatches = fileInput && batchSize ? Math.ceil(totalFiles / batchSize) : 1;
+                let requestFinished = false;
+                let requestAborted = false;
+                let completedBytes = 0;
+                let completedFiles = 0;
+                const xhr = new XMLHttpRequest();
+
+                if (fileInput && totalFiles === 0) {
+                    fileInput.reportValidity();
+                    return;
+                }
+
+                if (loadingTarget) {
+                    loadingTarget.hidden = false;
+                }
+                if (progressTarget) {
+                    progressTarget.hidden = false;
+                }
+                if (submitButton) {
+                    submitButton.disabled = true;
+                }
+                if (cancelButton) {
+                    cancelButton.hidden = false;
+                    cancelButton.disabled = false;
+                }
+
+                const finishUploadState = function () {
+                    requestFinished = true;
+                    if (submitButton) {
+                        submitButton.disabled = false;
+                    }
+                    if (cancelButton) {
+                        cancelButton.hidden = true;
+                        cancelButton.disabled = true;
+                    }
+                };
+
+                const updateProgress = function (percent, note) {
+                    const clampedPercent = Math.min(100, Math.max(0, Math.round(percent)));
+                    if (progressBar) {
+                        progressBar.style.width = clampedPercent + "%";
+                    }
+                    if (progressValue) {
+                        progressValue.textContent = clampedPercent + "%";
+                    }
+                    if (progressNote) {
+                        progressNote.textContent = note;
+                    }
+                };
+
+                const updateFailureMessage = function (message) {
+                    if (progressNote) {
+                        progressNote.textContent = message;
+                    }
+                };
+
+                const buildBatchFormData = function (batchFiles) {
+                    const formData = new FormData();
+                    Array.from(form.elements).forEach(function (field) {
+                        if (!field.name || field.disabled || field.type === "file") {
+                            return;
+                        }
+                        if ((field.type === "checkbox" || field.type === "radio") && !field.checked) {
+                            return;
+                        }
+                        if (field.tagName === "SELECT" && field.multiple) {
+                            Array.from(field.selectedOptions).forEach(function (option) {
+                                formData.append(field.name, option.value);
+                            });
+                            return;
+                        }
+                        formData.append(field.name, field.value);
+                    });
+                    batchFiles.forEach(function (file) {
+                        formData.append(fileInput.name, file);
+                    });
+                    return formData;
+                };
+
+                if (cancelButton) {
+                    cancelButton.onclick = function () {
+                        if (requestFinished) {
+                            return;
+                        }
+                        requestAborted = true;
+                        xhr.abort();
+                    };
+                }
+
+                const sendBatch = function (batchIndex) {
+                    const batchFiles = fileInput && batchSize
+                        ? selectedFiles.slice(batchIndex * batchSize, (batchIndex + 1) * batchSize)
+                        : [];
+                    const batchNumber = batchIndex + 1;
+                    const batchBytes = batchFiles.reduce(function (sum, file) {
+                        return sum + file.size;
+                    }, 0);
+
+                    xhr.open(method, actionUrl);
+                    xhr.setRequestHeader("X-Requested-With", "XMLHttpRequest");
+                    xhr.responseType = "text";
+
+                    xhr.upload.onprogress = function (uploadEvent) {
+                        if (!uploadEvent.lengthComputable) {
+                            return;
+                        }
+                        const uploadedBytes = completedBytes + uploadEvent.loaded;
+                        const percent = totalBytes ? (uploadedBytes / totalBytes) * 100 : 0;
+                        const uploadingNote = totalBatches > 1
+                            ? `Uploading batch ${batchNumber} of ${totalBatches}...`
+                            : "Uploading files to the server...";
+                        const indexingNote = totalBatches > 1
+                            ? `Batch ${batchNumber} uploaded. Indexing faces...`
+                            : "Upload complete. Indexing faces now...";
+                        updateProgress(percent, uploadEvent.loaded < uploadEvent.total ? uploadingNote : indexingNote);
+                    };
+
+                    xhr.onload = function () {
+                        if (xhr.status >= 200 && xhr.status < 300) {
+                            completedBytes += batchBytes;
+                            completedFiles += batchFiles.length;
+                            if (batchNumber < totalBatches) {
+                                updateProgress(
+                                    totalBytes ? (completedBytes / totalBytes) * 100 : 0,
+                                    `Indexed batch ${batchNumber} of ${totalBatches}. Starting the next batch...`,
+                                );
+                                sendBatch(batchIndex + 1);
+                                return;
+                            }
+                            finishUploadState();
+                            updateProgress(100, `Upload finished. Indexed ${completedFiles} file(s). Refreshing results...`);
+                            window.location.reload();
+                            return;
+                        }
+                        finishUploadState();
+                        const statusText = xhr.statusText ? ` ${xhr.statusText}` : "";
+                        updateFailureMessage(`Upload failed (HTTP ${xhr.status}${statusText}) on batch ${batchNumber} of ${totalBatches}. Check the server log.`);
+                        if (xhr.responseText) {
+                            console.error("Upload request failed:", {
+                                status: xhr.status,
+                                statusText: xhr.statusText,
+                                responseText: xhr.responseText.slice(0, 1200),
+                                batchNumber: batchNumber,
+                                totalBatches: totalBatches,
+                            });
+                        }
+                    };
+
+                    xhr.onerror = function () {
+                        finishUploadState();
+                        updateFailureMessage(`Upload failed due to a network or server error on batch ${batchNumber} of ${totalBatches}. Check the server log.`);
+                    };
+
+                    xhr.ontimeout = function () {
+                        finishUploadState();
+                        updateFailureMessage(`Upload timed out while processing batch ${batchNumber} of ${totalBatches}.`);
+                    };
+
+                    xhr.onabort = function () {
+                        finishUploadState();
+                        if (loadingTarget) {
+                            loadingTarget.hidden = true;
+                        }
+                        if (requestAborted && fileInput) {
+                            fileInput.value = "";
+                        }
+                        updateProgress(0, "Upload cancelled.");
+                    };
+
+                    const formData = fileInput ? buildBatchFormData(batchFiles) : new FormData(form);
+                    xhr.send(formData);
+                };
+
+                if (totalBatches === 0) {
+                    finishUploadState();
+                    updateFailureMessage("Select at least one file before uploading.");
+                    return;
+                }
+
+                if (totalBatches > 1) {
+                    updateProgress(0, `Preparing ${totalFiles} files for ${totalBatches} upload batches...`);
+                } else {
+                    updateProgress(0, "Uploading files...");
+                }
+
+                sendBatch(0);
+            });
+        });
+
+        document.querySelectorAll("[data-copy-text]").forEach(function (button) {
+            button.addEventListener("click", async function () {
+                const originalText = button.textContent;
+                try {
+                    await navigator.clipboard.writeText(button.dataset.copyText);
+                    button.textContent = "Copied";
+                    setTimeout(function () {
+                        button.textContent = originalText;
+                    }, 1400);
+                } catch (error) {
+                    button.textContent = "Copy failed";
+                    setTimeout(function () {
+                        button.textContent = originalText;
+                    }, 1400);
+                }
+            });
+        });
+
+        document.querySelectorAll("[data-event-link-form]").forEach(function (form) {
+            form.addEventListener("submit", function (event) {
+                event.preventDefault();
+                const input = form.querySelector("input[name='event_link']");
+                if (!input) {
+                    return;
+                }
+                const value = input.value.trim();
+                if (!value) {
+                    input.focus();
+                    return;
+                }
+                window.location.href = value;
+            });
+        });
+
+        document.querySelectorAll("[data-face-modal-open]").forEach(function (button) {
+            button.addEventListener("click", function () {
+                const modal = document.getElementById(button.dataset.faceModalOpen);
+                if (!modal) {
+                    return;
+                }
+                modal.hidden = false;
+                document.body.classList.add("modal-open");
+            });
+        });
+
+        document.querySelectorAll(".face-modal").forEach(function (modal) {
+            modal.querySelectorAll("[data-face-modal-close]").forEach(function (control) {
+                control.addEventListener("click", function () {
+                    modal.hidden = true;
+                    document.body.classList.remove("modal-open");
+                });
+            });
+        });
+
+        document.addEventListener("keydown", function (event) {
+            if (event.key !== "Escape") {
+                return;
+            }
+            document.querySelectorAll(".face-modal").forEach(function (modal) {
+                modal.hidden = true;
+            });
+            document.body.classList.remove("modal-open");
+        });
+    </script>
+</body>
+</html>

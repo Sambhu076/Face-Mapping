@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% if event %}
+    <section class="dashboard-hero">
+        <div>
+            <p class="landing-kicker">User Dashboard</p>
+            <h2>{{ event.name }}</h2>
+            <p class="hero-copy">
+                This is the event-specific user dashboard linked from the QR code. Upload a face image to search only within {{ event.name }} and retrieve all matched photos.
+            </p>
+        </div>
+        <div class="dashboard-stats">
+            <div class="stat-card">
+                <strong>{{ photo_count }}</strong>
+                <span>Event Photos</span>
+            </div>
+            <div class="stat-card">
+                <strong>{{ face_count }}</strong>
+                <span>Indexed Faces</span>
+            </div>
+        </div>
+    </section>
+
+    <main class="dashboard-grid">
+        <section class="card">
+            <div class="section-heading">
+                <h2>Upload Your Face Image</h2>
+                <p>Enter your username and upload a clear selfie or face image. The system will match it against all photos in this event and return the images containing your face.</p>
+            </div>
+            <form method="post" enctype="multipart/form-data" class="stack" data-loading="search-loading">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="search">
+                {{ search_form.as_p }}
+                <button type="submit">Find My Photos</button>
+            </form>
+            <div id="search-loading" class="loading" hidden>Detecting face, generating embedding, and searching this event...</div>
+        </section>
+
+        <section class="card">
+            <div class="section-heading">
+                <h2>Downloads</h2>
+                <p>Download the matched photos from this event only.</p>
+            </div>
+            <div class="access-panel">
+                <p>The QR link opens only this event dashboard. After the face match completes, every retrieved photo can be downloaded here, either one by one or as a ZIP.</p>
+                <a class="cta-button" href="{% url 'faces:download-matches' %}">Download Matched ZIP</a>
+            </div>
+        </section>
+    </main>
+
+    <section class="results-block">
+        <div class="section-heading">
+            <h2>Matched Photos</h2>
+            <p>Your best matches from {{ event.name }} appear below.</p>
+        </div>
+        {% if matches %}
+            <div class="gallery">
+                {% for match in matches %}
+                    <article class="gallery-card">
+                        <img src="{{ match.face.photo.original_image.url }}" alt="{{ match.face.photo.title|default:'Matched photo' }}">
+                        <div class="gallery-meta">
+                            <h3>{{ match.face.photo.title|default:"Untitled Photo" }}</h3>
+                            <p>{{ match.face.photo.display_event_name }}</p>
+                            <p>Similarity: {{ match.score|floatformat:3 }}</p>
+                            <a class="download-link" href="{% url 'faces:download-photo' match.face.photo.id %}">Download Photo</a>
+                        </div>
+                    </article>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="empty-state">Upload a face image to find your photos in this event.</div>
+        {% endif %}
+    </section>
+{% else %}
+    <section class="dashboard-hero">
+        <div>
+            <p class="landing-kicker">User Dashboard</p>
+            <h2>Open your event-specific dashboard.</h2>
+            <p class="hero-copy">
+                User access is event-specific. Scan the QR code or open the event link shared by the studio to upload your face image and retrieve matching photos from that event only.
+            </p>
+        </div>
+    </section>
+    <section class="results-block">
+        <div class="empty-state">No event is active for this session. Ask the studio for your event QR or direct event link.</div>
+    </section>
+{% endif %}
+{% endblock %}

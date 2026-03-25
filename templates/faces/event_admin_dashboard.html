@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="dashboard-hero">
+    <div>
+        <p class="landing-kicker">Event Dashboard</p>
+        <h2>{{ event.name }}</h2>
+        <p class="hero-copy">
+            Upload files for this event, keep the archive indexed, and share guest access using the event QR code.
+        </p>
+        <p><a href="{% url 'faces:admin-dashboard' %}">Back to all events</a></p>
+    </div>
+    <div class="dashboard-stats">
+        <div class="stat-card">
+            <strong>{{ photo_count }}</strong>
+            <span>Indexed Photos</span>
+        </div>
+        <div class="stat-card">
+            <strong>{{ face_count }}</strong>
+            <span>Stored Faces</span>
+            {% if face_count > 0 %}
+            <button type="button" class="primary-link" data-face-modal-open="unique-faces-modal" style="margin-top: 0.8rem; width: 100%; padding: 0.5rem; font-size: 0.9rem; justify-content: center;">
+                View Faces
+            </button>
+            {% endif %}
+        </div>
+    </div>
+</section>
+
+{% if face_count > 0 %}
+<div class="face-modal" id="unique-faces-modal" hidden>
+    <div class="face-modal-backdrop" data-face-modal-close></div>
+    <div class="face-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="unique-faces-modal-title">
+        <div class="face-modal-header">
+            <div>
+                <p class="landing-kicker">Recognized Persons</p>
+                <h3 id="unique-faces-modal-title">Unique Faces</h3>
+                <p>These are all the unique individuals recognized in this event archive.</p>
+            </div>
+            <button type="button" class="button-subtle" data-face-modal-close>Close</button>
+        </div>
+        <div class="face-modal-layout" style="display: block;">
+            <div class="face-modal-faces" style="gap: 1rem; max-height: 60vh; overflow-y: auto;">
+                {% for face in unique_faces %}
+                <article class="face-preview-card">
+                    <div class="face-preview-crop" style="{{ face.preview_style }}">
+                        <img src="{{ face.photo_url }}" alt="Recognized Person {{ face.person_id }}">
+                    </div>
+                    <div class="face-preview-meta">
+                        <h4>Person</h4>
+                        {% if face.person_id %}
+                        <p>ID: <span title="{{ face.person_id }}">{{ face.person_id|truncatechars:10 }}</span></p>
+                        {% endif %}
+                    </div>
+                </article>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<main class="dashboard-grid">
+    <section class="card">
+        <div class="section-heading">
+            <h2>Bulk Upload Into Event</h2>
+            <p>Select as many files as needed. They are uploaded in batches of 20 and indexed after each batch.</p>
+        </div>
+        <form method="post" enctype="multipart/form-data" class="stack" data-loading="bulk-loading"
+            data-upload-progress="bulk-progress">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="bulk-upload">
+            {{ upload_form.as_p }}
+            <button type="submit">Upload and Index Files</button>
+        </form>
+        <div id="bulk-loading" class="loading" hidden>Uploading files, detecting faces, and updating the FAISS index...
+        </div>
+        <div id="bulk-progress" class="upload-progress" hidden>
+            <div class="upload-progress-header">
+                <strong>Upload Progress</strong>
+                <div class="upload-progress-actions">
+                    <span data-progress-value>0%</span>
+                    <button type="button" class="button-subtle" data-upload-cancel hidden>Cancel Upload</button>
+                </div>
+            </div>
+            <div class="upload-progress-track" aria-hidden="true">
+                <div class="upload-progress-bar" data-progress-bar></div>
+            </div>
+            <p class="upload-progress-note" data-progress-note>Preparing files...</p>
+        </div>
+    </section>
+
+    <section class="card">
+        <div class="section-heading">
+            <h2>Event QR Access</h2>
+            <p>Guests scan the QR or open the direct link to access only this event.</p>
+        </div>
+        <div class="event-link-box">
+            <code>{{ shared_link }}</code>
+            <img class="event-qr-image" src="{% url 'faces:event-qr' event.id %}" alt="QR code for {{ event.name }}">
+            <a class="copy-link-button" href="{% url 'faces:event-qr' event.id %}?download=1">Save As Image</a>
+        </div>
+    </section>
+</main>
+
+<section class="card">
+    <div class="section-heading archive-heading">
+        <div>
+            <h2>All Uploaded Photos</h2>
+            <p>Open the event archive in a popup to review uploaded photos, inspect recognized faces, or remove files.
+            </p>
+        </div>
+        {% if photos %}
+        <div class="event-admin-actions">
+            <button type="button" class="button-subtle" data-face-modal-open="event-uploaded-photos-modal">
+                View Uploaded Photos
+            </button>
+            <form method="post" class="archive-delete-all-form">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="delete-all-photos">
+                <button type="submit" class="button-subtle button-subtle-danger">Delete All Photos</button>
+            </form>
+        </div>
+        {% endif %}
+    </div>
+    {% if photos %}
+    <div class="empty-state">
+        {{ photo_count }} uploaded photo{{ photo_count|pluralize }} are available in the popup archive for this event.
+    </div>
+
+    <div class="face-modal" id="event-uploaded-photos-modal" hidden>
+        <div class="face-modal-backdrop" data-face-modal-close></div>
+        <div class="face-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="event-uploaded-photos-title">
+            <div class="face-modal-header">
+                <div>
+                    <p class="landing-kicker">Uploaded Photos</p>
+                    <h3 id="event-uploaded-photos-title">{{ event.name }}</h3>
+                    <p>Review the event archive, inspect recognized faces, and remove photos from this popup.</p>
+                </div>
+                <button type="button" class="button-subtle" data-face-modal-close>Close</button>
+            </div>
+            <div class="admin-photo-modal-grid">
+                {% for photo in photos %}
+                <article class="gallery-card admin-gallery-card">
+                    <img src="{{ photo.original_image.url }}" alt="{{ photo.title|default:'Uploaded photo' }}">
+                    <div class="gallery-meta">
+                        <h3>{{ photo.title|default:"Untitled Photo" }}</h3>
+                        <p>{{ photo.uploaded_at|date:"M d, Y H:i" }}</p>
+                        <p>{{ photo.face_count }} indexed face{{ photo.face_count|pluralize }}</p>
+                        {% if photo.detected_faces %}
+                        <button type="button" class="button-subtle" data-face-modal-open="face-modal-{{ photo.id }}">
+                            View Recognized Faces
+                        </button>
+                        {% endif %}
+                        <form method="post" class="admin-photo-delete-form">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="delete-photo">
+                            <input type="hidden" name="photo_id" value="{{ photo.id }}">
+                            <button type="submit" class="button-subtle button-subtle-danger">Delete Photo</button>
+                        </form>
+                    </div>
+                </article>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    {% for photo in photos %}
+    {% if photo.detected_faces %}
+    <div class="face-modal" id="face-modal-{{ photo.id }}" hidden>
+        <div class="face-modal-backdrop" data-face-modal-close></div>
+        <div class="face-modal-dialog" role="dialog" aria-modal="true"
+            aria-labelledby="face-modal-title-{{ photo.id }}">
+            <div class="face-modal-header">
+                <div>
+                    <p class="landing-kicker">Recognized Faces</p>
+                    <h3 id="face-modal-title-{{ photo.id }}">{{ photo.title|default:"Untitled Photo" }}</h3>
+                    <p>{{ photo.face_count }} indexed face{{ photo.face_count|pluralize }} in this photo.</p>
+                </div>
+                <button type="button" class="button-subtle" data-face-modal-close>Close</button>
+            </div>
+            <div class="face-modal-layout">
+                <div class="face-modal-image-panel">
+                    <img src="{{ photo.original_image.url }}" alt="{{ photo.title|default:'Uploaded photo' }}">
+                </div>
+                <div class="face-modal-faces">
+                    {% for face in photo.detected_faces %}
+                    <article class="face-preview-card">
+                        <div class="face-preview-crop" style="{{ face.preview_style }}">
+                            <img src="{{ photo.original_image.url }}"
+                                alt="Recognized face {{ face.face_index }} from {{ photo.title|default:'photo' }}">
+                        </div>
+                        <div class="face-preview-meta">
+                            <h4>Face {{ face.face_index }}</h4>
+                            {% if face.person_id %}
+                            <p>Person ID: <span title="{{ face.person_id }}">{{ face.person_id|truncatechars:10
+                                    }}</span></p>
+                            {% endif %}
+                            <p>Confidence: {{ face.detection_score|floatformat:3 }}</p>
+                            <p>Box: {{ face.bbox.x1 }}, {{ face.bbox.y1 }} to {{ face.bbox.x2 }}, {{ face.bbox.y2 }}</p>
+                        </div>
+                    </article>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    {% endfor %}
+    {% else %}
+    <div class="empty-state">No files have been uploaded for this event yet.</div>
+    {% endif %}
+</section>
+
+{% if upload_summary %}
+<section class="results-block">
+    <div class="section-heading">
+        <h2>Last Upload Summary</h2>
+        <p>{{ upload_summary.event.name }}</p>
+    </div>
+    <div class="summary-grid">
+        <div class="stat-card">
+            <strong>{{ upload_summary.success_count }}</strong>
+            <span>Indexed Files</span>
+        </div>
+        <div class="stat-card">
+            <strong>{{ upload_summary.failure_count }}</strong>
+            <span>Failed Files</span>
+        </div>
+        <div class="stat-card">
+            <strong>{{ upload_summary.indexed_faces }}</strong>
+            <span>Detected Faces</span>
+        </div>
+    </div>
+    {% if upload_summary.errors %}
+    <div class="error-list">
+        {% for error in upload_summary.errors %}
+        <p>{{ error }}</p>
+        {% endfor %}
+    </div>
+    {% endif %}
+</section>
+{% endif %}
+{% endblock %}
