@@ -25,6 +25,7 @@ The current codebase is centered on a Django application with server-rendered da
 ### Deployment
 - Docker and Docker Compose orchestrate `web`, `db`, `redis`, `celery_worker`, and `frontend`
 - Persistent volumes store PostgreSQL data, uploaded media, and FAISS index data
+- Environment-specific configuration is managed via `.env` (overriding default settings)
 
 ## 3. Core Domain Model
 The main application data lives in `faces/models.py`.
@@ -52,7 +53,8 @@ The main application data lives in `faces/models.py`.
 3. They open the event dashboard and upload up to 20 files per form submission.
 4. The app saves the `Photo` rows immediately and dispatches Celery tasks in batches.
 5. Background workers detect faces, generate embeddings, assign or reuse `person_id` values, and update the event FAISS index.
-6. Admins can review uploaded photos, inspect detected faces, delete individual photos, delete all photos for an event, and share the event link or QR code.
+6. Admins can review uploaded photos, inspect detected faces, and manage the archive with built-in **confirmation modals** for deleting individual photos, deleting all photos, or deleting entire events.
+7. Admins share the event link or QR code with guests.
 
 ### Guest workflow
 1. A guest opens `/dashboard/user/events/{slug}/{access_key}/`.
@@ -102,11 +104,11 @@ Bulk indexing is handled asynchronously.
 - ZIP downloads are generated only from those session-scoped matched photo ids
 
 ## 8. Configuration Highlights
-Key runtime settings currently come from `studioface/settings.py` and `.env`.
+Key runtime settings currently come from `.env` (primary) and `studioface/settings.py` (defaults).
 
-- `FACE_SIMILARITY_THRESHOLD`: defaults to `0.45`
-- `FACE_DETECTION_CONFIDENCE_THRESHOLD`: defaults to `0.55`
-- `FACE_SEARCH_TOP_K`: defaults to `256`
+- `FACE_SIMILARITY_THRESHOLD`: `0.60` (defaulted to `0.45` in code)
+- `FACE_DETECTION_CONFIDENCE_THRESHOLD`: `0.60` (defaulted to `0.55` in code)
+- `FACE_SEARCH_TOP_K`: `128` (defaulted to `256` in code)
 - `MAX_RESULTS`: `24`
 - `FACE_INSIGHTFACE_PROVIDERS`: defaults to `CPUExecutionProvider`
 - `FACE_SEARCH_ALL_QUERY_FACES`: defaults to `true`
@@ -123,6 +125,8 @@ Key runtime settings currently come from `studioface/settings.py` and `.env`.
 - `media/`: uploaded studio photos and query images
 - `frontend/`: standalone React/Vite frontend workspace
 - `frontend_dist/`: built frontend assets
+- `.gitignore`: comprehensive ignore patterns for Django, React, and environment files
+- `.env`: local environment configuration secret and overrides
 
 ## 10. Current Notes and Constraints
 - The project currently mixes a mature Django-rendered flow with a separate React frontend workspace; the Django templates are the primary user flow in the code reviewed here.
